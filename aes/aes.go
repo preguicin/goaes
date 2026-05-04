@@ -2,7 +2,6 @@ package aes_n
 
 import (
 	"errors"
-	"fmt"
 )
 
 type BlockType uint8
@@ -68,10 +67,10 @@ func aesEncrypt(block *[16]byte, keySchedule *[176]byte) {
 	addRoundKey(block, keySchedule[160:176])
 }
 
+// TODO: FIX Galois mult, it looks like the tables maybe are with wrong values or read on a incorrect order
 func mixColumns(block *[16]byte) {
 	var result [16]byte
 
-	fmt.Printf("% x\n", *block)
 	for c := range 4 {
 		for r := range 4 {
 			var acc byte = 0
@@ -84,7 +83,6 @@ func mixColumns(block *[16]byte) {
 		}
 	}
 	*block = result
-	fmt.Printf("% x\n", *block)
 }
 
 func galoisMultiplication(term1 byte, term2 byte) byte {
