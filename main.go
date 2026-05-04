@@ -2,21 +2,18 @@ package main
 
 import (
 	"fmt"
-	"goaes/aes"
+	aes "goaes/aes"
 )
 
 func main() {
 
-	key := []byte{'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P'}
-	data := []byte{'D', 'E', 'S', 'E', 'N', 'V', 'O', 'L', 'V', 'I', 'M', 'E', 'N', 'T', 'O', '!'}
+	key := [16]byte{'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P'}
+	data := []byte{'D', 'E', 'S', 'E', 'N', 'V', 'O', 'L', 'V', 'I', 'M', 'E', 'N', 'T', 'O'}
 
-	c := aes.Cipher{
-		Key:       key,
-		BlockType: aes.ECB,
-		IV:        make([]byte, 16),
+	c, err := aes.NewCipher(key, aes.ECB, [16]byte{})
+
+	if err != nil {
+		fmt.Printf("Err: %s\n", err.Error())
 	}
-
-	res := c.Encrypt(data)
-
-	fmt.Printf("% x", res)
+	c.Encrypt(data)
 }
