@@ -2,18 +2,21 @@ package main
 
 import (
 	"fmt"
-	aes "goaes/aes"
+	"goaes/aes"
 )
 
 func main() {
+	var key [16]byte
+	copy(key[:], "ABCDEFGHIJKLMNOP")
 
-	key := [16]byte{'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P'}
-	data := []byte{'D', 'E', 'S', 'E', 'N', 'V', 'O', 'L', 'V', 'I', 'M', 'E', 'N', 'T', 'O'}
+	data := []byte("DESENVOLVIMENTO!")
 
 	c, err := aes.NewCipher(key, aes.ECB, [16]byte{})
 
 	if err != nil {
 		fmt.Printf("Err: %s\n", err.Error())
 	}
-	c.Encrypt(data)
+	res := c.Encrypt(data)
+	res2, err := c.Decrypt(res)
+	fmt.Printf("%v\n", string(res2))
 }

@@ -1,7 +1,8 @@
-package aes_n
+package aes
 
 import (
 	"errors"
+	"fmt"
 )
 
 type BlockType uint8
@@ -29,7 +30,7 @@ func NewCipher(key [16]byte, bt BlockType, iv [16]byte) (*Cipher, error) {
 	}, nil
 }
 
-func (c *Cipher) Encrypt(src []byte) {
+func (c *Cipher) Encrypt(src []byte) []byte {
 	text := make([]byte, len(src))
 	copy(text, src)
 	text = padPKCS7(text, 16)
@@ -39,6 +40,7 @@ func (c *Cipher) Encrypt(src []byte) {
 
 	var previousBlock [16]byte = c.IV
 
+	var res = make([]byte, 0)
 	for _, block := range blocks {
 		if c.BlockType == CBC {
 			for i := range block {
@@ -49,7 +51,10 @@ func (c *Cipher) Encrypt(src []byte) {
 		if c.BlockType == CBC {
 			previousBlock = block
 		}
+		res = append(res, block[:]...)
 	}
+
+	return res
 }
 
 func aesEncrypt(block *[16]byte, keySchedule *[176]byte) {
@@ -67,24 +72,23 @@ func aesEncrypt(block *[16]byte, keySchedule *[176]byte) {
 	addRoundKey(block, keySchedule[160:176])
 }
 
-// TODO: FIX Galois mult, it looks like the tables maybe are with wrong values or read on a incorrect order
 func mixColumns(block *[16]byte) {
 	var result [16]byte
 
-	for c := range 4 {
-		for r := range 4 {
-			var acc byte = 0
-			for i := range 4 {
-				mVal := multMatrix[r*4+i]
-				bVal := block[c*4+i]
-				acc ^= galoisMultiplication(bVal, mVal)
-			}
-			result[c*4+r] = acc
+	for i := range 16 {
+		c := i % 4
+		r := i / 4
+
+		var acc byte = 0
+		for k := range 4 {
+			mVal := multMatrix[r*4+k]
+			bVal := block[c*4+k]
+			acc ^= galoisMultiplication(bVal, mVal)
 		}
+		result[c*4+r] = acc
 	}
 	*block = result
 }
-
 func galoisMultiplication(term1 byte, term2 byte) byte {
 	if term1 == 0 || term2 == 0 {
 		return 0
@@ -101,7 +105,7 @@ func galoisMultiplication(term1 byte, term2 byte) byte {
 
 	res := int(res1) + int(res2)
 
-	if res >= 0xFF {
+	if res > 0xFF {
 		res -= 0xFF
 	}
 
@@ -129,6 +133,93 @@ func addRoundKey(block *[16]byte, key []byte) {
 	for i := range block {
 		block[i] ^= key[i]
 	}
+}
+
+func (c *Cipher) Decrypt(src []byte) ([]byte, error) {
+	text := make([]byte, len(src))
+	copy(text, src)
+
+	blocks := breakIntoBlocks(text)
+	keySchedule := c.expandKeys()
+
+	var res = make([]byte, 0)
+	for _, block := range blocks {
+		aesDecrypt(&block, keySchedule)
+		res = append(res, block[:]...)
+	}
+	res, err := unpadPKCS7(res)
+
+	return res, err
+}
+
+func aesDecrypt(block *[16]byte, keySchedule *[176]byte) {
+	addRoundKey(block, keySchedule[160:176])
+	invShiftRows(block)
+	invSubBytes(block)
+
+	for i := 9; i > 0; i-- {
+		bIdx := i * 16
+		addRoundKey(block, keySchedule[bIdx:bIdx+16])
+		invMixColumns(block)
+		invShiftRows(block)
+		invSubBytes(block)
+	}
+	addRoundKey(block, keySchedule[0:16])
+}
+
+func invMixColumns(block *[16]byte) {
+	var result [16]byte
+
+	for i := range 16 {
+		c := i % 4
+		r := i / 4
+
+		var acc byte = 0
+		for k := range 4 {
+			mVal := invMultMatrix[r*4+k]
+			bVal := block[c*4+k]
+			acc ^= galoisMultiplication(bVal, mVal)
+		}
+		result[c*4+r] = acc
+	}
+	*block = result
+}
+func invSubBytes(block *[16]byte) {
+	for i := range block {
+		block[i] = rsbox[block[i]]
+	}
+}
+func invShiftRows(block *[16]byte) {
+	temp := *block
+	for row := range 4 {
+		for col := range 4 {
+			sourceCol := (col - row + 4) % 4
+			sourceIdx := (sourceCol * 4) + row
+			destIdx := (col * 4) + row
+
+			block[destIdx] = temp[sourceIdx]
+		}
+	}
+}
+func unpadPKCS7(data []byte) ([]byte, error) {
+	length := len(data)
+	if length == 0 {
+		return nil, fmt.Errorf("data is empty")
+	}
+
+	paddingLen := int(data[length-1])
+
+	if paddingLen == 0 || paddingLen > length {
+		return nil, fmt.Errorf("invalid padding length")
+	}
+
+	for i := range paddingLen {
+		if data[length-1-i] != byte(paddingLen) {
+			return nil, fmt.Errorf("invalid padding characters")
+		}
+	}
+
+	return data[:length-paddingLen], nil
 }
 
 func padPKCS7(data []byte, blockSize int) []byte {
