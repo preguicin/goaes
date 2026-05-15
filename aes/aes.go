@@ -33,7 +33,7 @@ func NewCipher(key [16]byte, bt BlockType, iv [16]byte) (*Cipher, error) {
 func (c *Cipher) Encrypt(src []byte) []byte {
 	text := make([]byte, len(src))
 	copy(text, src)
-	text = padPKCS7(text, 16)
+	text = PadPKCS7(text, 16)
 
 	blocks := breakIntoBlocks(text)
 	keySchedule := c.expandKeys()
@@ -143,9 +143,23 @@ func (c *Cipher) Decrypt(src []byte) ([]byte, error) {
 	keySchedule := c.expandKeys()
 
 	var res = make([]byte, 0)
+	var previousBlock [16]byte = c.IV
 	for _, block := range blocks {
+		var currentCiphertext [16]byte
+		copy(currentCiphertext[:], block[:])
+
 		aesDecrypt(&block, keySchedule)
+
+		if c.BlockType == CBC {
+			for i := range block {
+				block[i] ^= previousBlock[i]
+			}
+		}
 		res = append(res, block[:]...)
+
+		if c.BlockType == CBC {
+			previousBlock = currentCiphertext
+		}
 	}
 	res, err := unpadPKCS7(res)
 
@@ -222,7 +236,7 @@ func unpadPKCS7(data []byte) ([]byte, error) {
 	return data[:length-paddingLen], nil
 }
 
-func padPKCS7(data []byte, blockSize int) []byte {
+func PadPKCS7(data []byte, blockSize int) []byte {
 	paddingLen := blockSize - (len(data) % blockSize)
 	padding := make([]byte, paddingLen)
 	for i := range padding {
@@ -266,6 +280,7 @@ func (c *Cipher) expandKeys() *[176]byte {
 
 	return &keys
 }
+
 func breakIntoBlocks(data []byte) [][16]byte {
 	numBlocks := len(data) / 16
 	blocks := make([][16]byte, 0, numBlocks)
