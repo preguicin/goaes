@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
 	"goaes/aes"
 	"os"
@@ -10,53 +11,68 @@ import (
 )
 
 func main() {
-	reader := bufio.NewReader(os.Stdin)
+	// 1. Define standard CLI flags
+	interactive := flag.Bool("i", false, "Run in interactive mode")
+	modeFlag := flag.String("mode", "", "Operation mode: ecb or cbc")
+	opFlag := flag.String("op", "", "Action: encrypt or decrypt")
+	inFlag := flag.String("in", "", "Input file path")
+	outFlag := flag.String("out", "", "Output file path")
+	keyFlag := flag.String("key", "", "Key (16 comma-separated decimal numbers)")
+	ivFlag := flag.String("iv", "", "IV (16 comma-separated decimal numbers, required for CBC)")
 
-	fmt.Println("--- AES-128 File Processor ---")
-
-	fmt.Print("Escolha o modo de operação ([1] ECB ou [2] CBC): ")
-	modeInput, _ := reader.ReadString('\n')
-	modeInput = strings.TrimSpace(modeInput)
+	flag.Parse()
 
 	var mode aes.BlockType
-	switch modeInput {
-	case "1":
-		mode = aes.ECB
-	case "2":
-		mode = aes.CBC
-	default:
-		fmt.Println("Modo inválido.")
-		return
-	}
+	var op string
+	var pathIn, pathOut string
+	var key, iv [16]byte
+	var err error
 
-	fmt.Print("Escolha a ação ([C]ifrar ou [D]ecifrar): ")
-	opInput, _ := reader.ReadString('\n')
-	op := strings.ToUpper(strings.TrimSpace(opInput))
-
-	fmt.Print("Caminho do arquivo de entrada: ")
-	pathIn, _ := reader.ReadString('\n')
-	pathIn = strings.TrimSpace(pathIn)
-
-	fmt.Print("Nome do arquivo de saída: ")
-	pathOut, _ := reader.ReadString('\n')
-	pathOut = strings.TrimSpace(pathOut)
-
-	fmt.Print("Informe a chave (16 números decimais separados por vírgula):\n> ")
-	keyInput, _ := reader.ReadString('\n')
-	key, err := parseDecimalInput(keyInput)
-	if err != nil {
-		fmt.Printf("Erro na chave: %v\n", err)
-		return
-	}
-
-	var iv [16]byte
-	if mode == aes.CBC {
-		fmt.Print("Informe o IV (16 números decimais separados por vírgula):\n> ")
-		ivInput, _ := reader.ReadString('\n')
-		iv, err = parseDecimalInput(ivInput)
-		if err != nil {
-			fmt.Printf("Erro no IV: %v\n", err)
+	if *interactive || (*modeFlag == "" && *opFlag == "" && *inFlag == "") {
+		runInteractive(&mode, &op, &pathIn, &pathOut, &key, &iv)
+	} else {
+		if *modeFlag != "ecb" && *modeFlag != "cbc" {
+			fmt.Println("Error: -mode must be 'ecb' or 'cbc'")
+			flag.Usage()
 			return
+		}
+		if *modeFlag == "ecb" {
+			mode = aes.ECB
+		} else {
+			mode = aes.CBC
+		}
+
+		op = strings.ToUpper(*opFlag)
+		if op != "ENCRYPT" && op != "DECRYPT" {
+			fmt.Println("Error: -op must be 'encrypt' or 'decrypt'")
+			return
+		}
+		// Map encrypt/decrypt to your internal C/D codes
+		if op == "ENCRYPT" {
+			op = "C"
+		} else {
+			op = "D"
+		}
+
+		if *inFlag == "" || *outFlag == "" {
+			fmt.Println("Error: -in and -out paths are required.")
+			return
+		}
+		pathIn = *inFlag
+		pathOut = *outFlag
+
+		key, err = parseDecimalInput(*keyFlag)
+		if err != nil {
+			fmt.Printf("Error parsing key flag: %v\n", err)
+			return
+		}
+
+		if mode == aes.CBC {
+			iv, err = parseDecimalInput(*ivFlag)
+			if err != nil {
+				fmt.Printf("Error parsing IV flag: %v\n", err)
+				return
+			}
 		}
 	}
 
@@ -84,9 +100,6 @@ func main() {
 			return
 		}
 		fmt.Println("Sucesso: Arquivo decifrado.")
-	default:
-		fmt.Println("Operação inválida.")
-		return
 	}
 
 	err = os.WriteFile(pathOut, result, 0644)
@@ -95,6 +108,62 @@ func main() {
 		return
 	}
 	fmt.Printf("Arquivo salvo em: %s\n", pathOut)
+}
+
+// Relocated interactive logic to keep main clean
+func runInteractive(mode *aes.BlockType, op *string, pathIn *string, pathOut *string, key *[16]byte, iv *[16]byte) {
+	reader := bufio.NewReader(os.Stdin)
+	var err error
+
+	fmt.Println("--- AES-128 File Processor (Interactive Mode) ---")
+
+	fmt.Print("Escolha o modo de operação ([1] ECB ou [2] CBC): ")
+	modeInput, _ := reader.ReadString('\n')
+	modeInput = strings.TrimSpace(modeInput)
+
+	switch modeInput {
+	case "1":
+		*mode = aes.ECB
+	case "2":
+		*mode = aes.CBC
+	default:
+		fmt.Println("Modo inválido.")
+		os.Exit(1)
+	}
+
+	fmt.Print("Escolha a ação ([C]ifrar ou [D]ecifrar): ")
+	opInput, _ := reader.ReadString('\n')
+	*op = strings.ToUpper(strings.TrimSpace(opInput))
+	if *op != "C" && *op != "D" {
+		fmt.Println("Operação inválida.")
+		os.Exit(1)
+	}
+
+	fmt.Print("Caminho do arquivo de entrada: ")
+	in, _ := reader.ReadString('\n')
+	*pathIn = strings.TrimSpace(in)
+
+	fmt.Print("Nome do arquivo de saída: ")
+	out, _ := reader.ReadString('\n')
+	*pathOut = strings.TrimSpace(out)
+
+	fmt.Print("Informe a chave (16 números decimais separados por vírgula):\n> ")
+	keyInput, _ := reader.ReadString('\n')
+	*key, err = parseDecimalInput(keyInput)
+	if err != nil {
+		fmt.Printf("Erro na chave: %v\n", err)
+		os.Exit(1)
+	}
+
+	if *mode == aes.CBC {
+		fmt.Print("Informe o IV (16 números decimais separados por vírgula):\n> ")
+		ivInput, _ := reader.ReadString('\n')
+		*iv, err = parseDecimalInput(ivInput)
+		if err != nil {
+			fmt.Printf("Erro no IV: %v\n", err)
+			os.Exit(1)
+		}
+	}
 }
 
 func parseDecimalInput(input string) ([16]byte, error) {
