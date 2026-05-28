@@ -1,6 +1,3 @@
-Here is the raw Markdown content for the `README.md` file:
-
-```markdown
 # AES-128 File Processor
 
 A lightweight Go command-line tool for encrypting and decrypting files using the AES-128 algorithm. It supports both standard **ECB (Electronic Codebook)** and **CBC (Cipher Block Chaining)** block cipher modes.
@@ -112,5 +109,4 @@ Both the `-key` and `-iv` flags require exactly **16 decimal numbers (bytes)** b
   -in document.enc \
   -out restored.txt \
   -key 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16
-
 ```
