@@ -19,6 +19,7 @@ func main() {
 	outFlag := flag.String("out", "", "Output file path")
 	keyFlag := flag.String("key", "", "Key (16 comma-separated decimal numbers)")
 	ivFlag := flag.String("iv", "", "IV (16 comma-separated decimal numbers, required for CBC)")
+	printFlag := flag.Bool("p", false, "Print blocks as hex")
 
 	flag.Parse()
 
@@ -47,7 +48,7 @@ func main() {
 			fmt.Println("Error: -op must be 'encrypt' or 'decrypt'")
 			return
 		}
-		// Map encrypt/decrypt to your internal C/D codes
+
 		if op == "ENCRYPT" {
 			op = "C"
 		} else {
@@ -93,6 +94,12 @@ func main() {
 	case "C":
 		result = c.Encrypt(data)
 		fmt.Println("Sucesso: Arquivo cifrado.")
+		if *printFlag {
+			hexStrs := aes.ResultAsHexStr(result)
+			for i, hs := range hexStrs {
+				fmt.Printf("Block(%d): %s", i, hs)
+			}
+		}
 	case "D":
 		result, err = c.Decrypt(data)
 		if err != nil {

@@ -293,3 +293,15 @@ func breakIntoBlocks(data []byte) [][16]byte {
 
 	return blocks
 }
+
+func ResultAsHexStr(data []byte) []string {
+	blocks := breakIntoBlocks(data)
+	result := make([]string, 0)
+
+	for _, b := range blocks {
+		str := fmt.Sprintf("% x", b)
+		result = append(result, str)
+	}
+
+	return result
+}
